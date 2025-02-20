@@ -1,67 +1,80 @@
 #include <AccelStepper.h>
 
-AccelStepper stepper(AccelStepper::FULL4WIRE, 2, 3, 4, 5);
+#define STEP_PIN 4
+#define DIR_PIN 5
+#define EN_PIN 6
+
+AccelStepper artery(AccelStepper::DRIVER, STEP_PIN, DIR_PIN); //create driver object
 
 const long STEP_PER_REVOLUTION = 200; // define this based on your stepper motor's specifications
+const uint8_t BPM = 60;              // set the heart rate of the pump
+const float frequency = BPM / 60;      // convert BPM into Hz
 
 unsigned long previousMillis = 0; // stores last time update
-long interval = 3000; // interval at which to run (milliseconds)
+long interval = 1500; // interval at which to run (milliseconds)
 
-// State machine for the motor's direction and duration
+// State machine for the motor's direction and duration, names reference systole and diastole
 enum MotorState {
-  CW_3_SEC,
-  CCW_1_SEC,
-  CW_1_SEC,
-  CCW_5_SEC
+  sys_rise,
+  sys_fall,
+  dia_rise,
+  dia_fall
 };
 
-MotorState currentMotorState = CW_3_SEC;
+MotorState currentMotorState = sys_rise;
 
 void setup() {
-  stepper.setMaxSpeed(1000); // Set max speed
-  stepper.setSpeed(-1000);    // Start with CW direction
+  artery.setMaxSpeed(250 / ((1 / frequency) * 0.375)); // Set max speed as position to travel / time to travel
+  artery.setAcceleration(2000);
+  artery.move(250);
+  pinMode(EN_PIN, OUTPUT);
+  digitalWrite(EN_PIN, LOW);
 }
 
 void loop() {
-  // unsigned long currentMillis = millis();
+  unsigned long currentMillis = millis();
 
-  // switch (currentMotorState) {
-  //   case CW_3_SEC:
-  //     if (currentMillis - previousMillis >= 3000) { // 3 seconds
-  //       stepper.setSpeed(-1000); // Change direction to CCW
-  //       currentMotorState = CCW_1_SEC;
-  //       previousMillis = currentMillis; // Remember the switch time
-  //       interval = 3000; // Next interval for 1 second
-  //     }
-  //     break;
+  switch (currentMotorState) {
+    case sys_rise:
+      if (currentMillis - previousMillis >= ((1000 / frequency) * 0.375) + 50) {
+        artery.setMaxSpeed(125 / (float) ((1 / frequency) * 0.125)); // Change max speed 
+        artery.move(-125); // Change direction to CCW
+        currentMotorState = sys_fall;
+        previousMillis = currentMillis; // Remember the switch time
+        //interval = 3000; // Next interval for 1 second
+      }
+      break;
 
-  //   case CCW_1_SEC:
-  //     if (currentMillis - previousMillis >= interval) {
-  //       stepper.setSpeed(1000); // Change direction to CW
-  //       currentMotorState = CW_1_SEC;
-  //       previousMillis = currentMillis;
-  //       interval = 3000; // Next interval for 1 second
-  //     }
-  //     break;
+    case sys_fall:
+      if (currentMillis - previousMillis >= ((1000 / frequency) * 0.125) + 100) {
+        artery.setMaxSpeed(25 / (float) ((1 / frequency) * 0.167)); // Change max speed 
+        artery.move(25); // Change direction to CW
+        currentMotorState = dia_rise;
+        previousMillis = currentMillis;
+        //interval = 3000; // Next interval for 1 second
+      }
+      break;
 
-  //   case CW_1_SEC:
-  //     if (currentMillis - previousMillis >= interval) {
-  //       stepper.setSpeed(-1000); // Change direction to CCW
-  //       currentMotorState = CCW_5_SEC;
-  //       previousMillis = currentMillis;
-  //       interval = 3000; // Next interval for 5 seconds
-  //     }
-  //     break;
+    case dia_rise:
+      if (currentMillis - previousMillis >= ((1000 / frequency) * 0.167) + 50) {
+        artery.setMaxSpeed(150 / (float) ((1 / frequency) * 0.333)); // Change max speed 
+        artery.move(-150); // Change direction to CCW
+        currentMotorState = dia_fall;
+        previousMillis = currentMillis;
+        //interval = 3000; // Next interval for 5 seconds
+      }
+      break;
 
-  //   case CCW_5_SEC:
-  //     if (currentMillis - previousMillis >= interval) {
-  //       stepper.setSpeed(1000); // Change direction to CW
-  //       currentMotorState = CW_3_SEC; // Loop back to the first state
-  //       previousMillis = currentMillis;
-  //       interval = 3000; // Next interval back to 3 seconds
-  //     }
-  //     break;
-  // }
+    case dia_fall:
+      if (currentMillis - previousMillis >= ((1000 / frequency) * 0.333) + 100) {
+        artery.setMaxSpeed(250 / (float) ((1 / frequency) * 0.375)); // Change max speed 
+        artery.move(250); // Change direction to CW
+        currentMotorState = sys_rise; // Loop back to the first state
+        previousMillis = currentMillis;
+        //interval = 3000; // Next interval back to 3 seconds
+      }
+      break;
+  }
 
-  stepper.runSpeed();
+  artery.run();
 }
